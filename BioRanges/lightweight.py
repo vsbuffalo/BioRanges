@@ -22,7 +22,7 @@ STRAND_OPTIONS = ("+", "-", "*")
 NUM_RANGES_DISPLAY = 10
 
 import pdb
-from collections import Counter, OrderedDict
+from collections import Counter, defaultdict
 
 def verify_arg_length(msg, args):
     """
@@ -63,9 +63,12 @@ class Range(object):
         self.start = start
         self.end = end
         self.width = width
+        self.name = name
 
     def __repr__(self):
-        return "Range"
+        if self.name is not None:
+            return "Range '%s' over [%d, %d]" % (self.start, self.end)
+        return "Range over [%d, %d]" % (self.start, self.end)
 
     def overlaps(self, other):
         """
@@ -155,7 +158,7 @@ class SeqRange(object):
     A range on a sequence (chromosome, contig, etc).
     """
 
-    def __init__(self, range, seqname, strand, data=None):
+    def __init__(self, range, seqname, strand, data=dict()):
         """
         Constructor method for SequenceRange objects.
         """
@@ -168,7 +171,9 @@ class SeqRange(object):
         self.data = data
 
     def __repr__(self):
-        return "SeqRange(%d, %d, %s)" % (range.start, range.end, strand)
+        repr_str = "SeqRange on '%s', strand '%s' at [%d, %d], %d data keys"
+        return repr_str % (self.seqname, self.strand,
+                           self.range.start, self.range.end, len(self.data))
 
     def overlaps(self, other):
         """
@@ -188,7 +193,7 @@ class SeqRanges(object):
     contig, etc).
     """
 
-    def __init__(self, ranges, strands, seqnames, datas=None):
+    def __init__(self, ranges, seqnames, strands, datas=None):
         """
         Constructor method for SeqRange objects.
         """
@@ -208,25 +213,44 @@ class SeqRanges(object):
         arg_len = verify_arg_length("list of ranges, strands, seqnames, and "
                                      "datas must be of the same length", args)
 
-        self._ranges = list()
+        self._ranges = defaultdict(list)
         for i in range(arg_len):
             rng = ranges[i]
             if datas is not None:
-                self._ranges.append(SeqRange(rng, strands[i], seqnames[i], datas[i]))
+                self._ranges[seqnames[i]].append(SeqRange(rng, seqnames[i], strands[i], datas[i]))
             else:
-                self._ranges.append(SeqRange(rng, strands[i], seqnames[i]))
+                self._ranges[seqnames[i]].append(SeqRange(rng, seqnames[i], strands[i]))
 
     def __repr__(self):
         """
         Representation of SeqRanges collection using a few sample
-        rows.
+        rows, from keys in alphabetical order.
         """
         lines = ["SeqRanges with %d ranges" % len(self)]
         header = ["seqnames", "ranges", "strand"]
         rows = [header]
         ncols = range(len(header))
         max_col_width = [len(c) for c in header]
-        for i, seqrange in enumerate(self._ranges[:NUM_RANGES_DISPLAY]):
+        keys = self._ranges.keys()
+        keys.sort()
+
+        # Because this is a nested data structure, the best approach
+        # is to make a temporary list of ranges to be output.
+        display_ranges = list()
+        ndisp = 0
+        for key in keys:
+            for rng in self._ranges[key]:
+                if ndisp < NUM_RANGES_DISPLAY:
+                    display_ranges.append(rng)
+                    ndisp += 1
+                else:
+                    break
+            if ndisp >= NUM_RANGES_DISPLAY:
+                break                
+
+        # Add columns for the display ranges. In the future, this could
+        # be merged with the above loops.
+        for seqrange in display_ranges:
             rng = seqrange.range
             this_row = [seqrange.seqname,
                         "[%d, %d]" % (rng.start, rng.end),
@@ -234,7 +258,7 @@ class SeqRanges(object):
             max_col_width = [max((len(this_row[j]), max_col_width[j])) for j in ncols]
             rows.append(this_row)
 
-        # now, add appropriate formating and spacing
+        # Now, add appropriate formating and spacing
         for row in rows:
             tmp_line = ""
             for i, col in enumerate(row):
@@ -243,7 +267,28 @@ class SeqRanges(object):
                 tmp_line += " "*(max_col_width[i] - len(col)) + col
             lines.append(tmp_line)
 
-        return "\n".join(lines)
+        spacer = " "*(max_col_width[0] - 5)
+        return "\n".join(lines) + "\n%s[...]\n" % spacer
+
+    def append(self, other):
+        """
+        Add on a new SeqRange object, or if x is a SeqRanges object,
+        combine them.
+        """
+        other_class = x.__class__.__name__
+        if other_class == "SeqRange":
+            self._range.append(other)
+        elif other_class == "SeqRanges":
+            self._ranges.append(other)
+
+    def extend(self, seqranges_list):
+        """
+        Extend this SeqRanges with a list full of SeqRange objects.
+        """
+        class_ok = [x.__class__.__name__ == "SeqRange" for x in seqranges_list]
+        if not all(class_ok):
+            raise ValueError("extend() method can only handle SeqRange objects")
+        self._ranges.extend(seqrange)
 
     def __len__(self):
         """
