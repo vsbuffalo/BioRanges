@@ -21,17 +21,19 @@ analysis.
 STRAND_OPTIONS = ("+", "-", "*")
 NUM_RANGES_DISPLAY = 10
 
+import pdb
 from collections import Counter, OrderedDict
 
-def verify_arg_length(msg, *args):
+def verify_arg_length(msg, args):
     """
     Check whether the lists of arguments supplied are the same (if
     they are not still None). If not, raise ValueError with message
-    msg.
+    msg. Return the length of arguments.
     """
-    arg_lens = set([len(x) for x in args if x is not None]) if
-    len(arg_lens) > 1: raise ValueError(msg)
-    return arg_lens
+    arg_lens = set([len(x) for x in args if x is not None])
+    if len(arg_lens) > 1:
+        raise ValueError(msg)
+    return list(arg_lens)[0]
 
 class Range(object):
     """
@@ -46,7 +48,7 @@ class Range(object):
         if Counter((start, end, width))[None] > 2:
             raise ValueError("too few arguments for Range(): "
                              "need two of [start, end, width]")
-        if end > start or width < 0:
+        if start > end or (width is not None and width < 0):
             raise ValueError("negative range widths not allowed "
                              "(end > start and width >= 0)")
 
@@ -87,11 +89,11 @@ class Ranges(object):
         # check whether the lists of arguments supplied are the same
         # (if they are not still None).
         args = [starts, ends, widths, names]
-        arg_lens = verify_arg_length("list of starts, ends, widths, and "
+        arg_len = verify_arg_length("list of starts, ends, widths, and "
                                      "names must be of the same length", args)
 
         self._ranges = list()
-        for i in range(len(arg_lens[0])):
+        for i in range(arg_len):
             self._ranges.append(Range(starts[i], ends[i], widths[i], names[i]))
         
     def __len__(self):
@@ -110,7 +112,7 @@ class Ranges(object):
         """
         Set item in Ranges collection.
         """
-        return self._ranges[i] = range
+        self._ranges[i] = range
     
     def __getitem__(self, i):
         """
@@ -202,16 +204,17 @@ class SeqRanges(object):
         # this with interval trees and handle these issues throught
         # that.
         
-        args = [ranges, strands, seqnames, datas]
-        arg_lens = verify_arg_length("list of ranges, strands, seqnames, and "
+        args = [a for a in [ranges, strands, seqnames, datas] if a is not None]
+        arg_len = verify_arg_length("list of ranges, strands, seqnames, and "
                                      "datas must be of the same length", args)
 
-        self._ranges = OrderedDict()
-        for i in range(len(arg_lens[0])):
-            r = Range(starts[i], ends[i], widths[i], names[i])
-            if seqnames[i] not in self._ranges:
-                self._ranges[seqnames[i]] = list()
-            self._ranges[seqnames[i]].append(SeqRange(r, strands[i], seqnames[i], datas[i]))
+        self._ranges = list()
+        for i in range(arg_len):
+            rng = ranges[i]
+            if datas is not None:
+                self._ranges.append(SeqRange(rng, strands[i], seqnames[i], datas[i]))
+            else:
+                self._ranges.append(SeqRange(rng, strands[i], seqnames[i]))
 
     def __repr__(self):
         """
@@ -223,19 +226,21 @@ class SeqRanges(object):
         rows = [header]
         ncols = range(len(header))
         max_col_width = [len(c) for c in header]
-        for i in range(NUM_RANGES_DISPLAY):
-            rng = ranges[i]
-            this_row = [seqnames[i],
-                        "[%d, %d]" % (rng[i].start, rng[i].end),
-                        str(strands[i])]
-            max_col_width = [max((this_row[j], max_col_width[j])) for j in ncols]
+        for i, seqrange in enumerate(self._ranges[:NUM_RANGES_DISPLAY]):
+            rng = seqrange.range
+            this_row = [seqrange.seqname,
+                        "[%d, %d]" % (rng.start, rng.end),
+                        str(seqrange.strand)]
+            max_col_width = [max((len(this_row[j]), max_col_width[j])) for j in ncols]
             rows.append(this_row)
 
         # now, add appropriate formating and spacing
         for row in rows:
             tmp_line = ""
-            for i, col in enumerate(row[i]):
-                tmp_line += " "*(max_col_width[i] - len(col))
+            for i, col in enumerate(row):
+                if i > 0:
+                    tmp_line += " "
+                tmp_line += " "*(max_col_width[i] - len(col)) + col
             lines.append(tmp_line)
 
         return "\n".join(lines)
@@ -244,7 +249,7 @@ class SeqRanges(object):
         """
         Return the number of ranges in this object.
         """
-        return sum([len(k) for k in self._ranges])
+        return len(self._ranges)
 
     def __setitem__(self, i, seqrange):
         """
