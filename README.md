@@ -30,8 +30,19 @@ Bioconductor is a better environment for analysis in my opinion. But
 for processing lots of data, Python can be a more comfortable
 environment.
 
+There are some key differences between BioRanges and GenomicRanges:
+data is stored in a dictionary, so it won't have the same structure as
+a GenomicRanges `GRanges` `elementMetaData` `DataFrame`. But this
+allows us to store BioPython's HSPs and other objects more
+easily. BioRanges won't have the same expressivity in terms of
+interval operations.
+
 ## Development
 
 Please help! Email me at vsbuffaloAAAA@ucdavis.edu (sans poly-A tail)
 if you wish to join, or just clone and send a pull request.
 
+## Todo
+
+ - Unit tests
+ - All interval tree backend code, efficiency testing.

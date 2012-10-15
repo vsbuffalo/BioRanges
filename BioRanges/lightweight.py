@@ -194,6 +194,7 @@ class SeqRange(object):
 
         if strand not in STRAND_OPTIONS:
             raise ValueError("strand must be either: %s" % ', '.join(STRAND_OPTIONS))
+
         self.strand = strand
         self.data = data
 
@@ -220,13 +221,6 @@ class SeqRange(object):
         Return start position (accessor for range.start).
         """
         return self.range.start
-
-    @property
-    def strand(self):
-        """
-        Return strands (accessor for range.strand).
-        """
-        return self.range.strand
 
     @property
     def end(self):
@@ -256,7 +250,7 @@ class SeqRanges(object):
     contig, etc).
     """
 
-    def __init__(self, ranges, strands, seqnames, seqlengths=dict(),
+    def __init__(self, ranges, seqnames, strands, seqlengths=dict(),
                  data_list=None):
         """
         Constructor method for SeqRange objects.
@@ -272,18 +266,18 @@ class SeqRanges(object):
         # O(1) lookup time. The non-lightweight implementation will do
         # this with interval trees and handle these issues throught
         # that.
-        args = [ranges, strands, seqnames, data_list]
+        args = [ranges, seqnames, strands, data_list]
         not_none_args = [a for a in args if a is not None]
-        arg_len = verify_arg_length("list of ranges, strands, seqnames, and "
+        arg_len = verify_arg_length("list of ranges, seqnames, strands, and "
                                      "data_list must be of the same length", not_none_args)
 
         self._ranges = list()
         for i in range(arg_len):
             rng = ranges[i]
             if data_list is not None:
-                self._ranges.append(SeqRange(rng, strands[i], seqnames[i], data_list[i]))
+                self._ranges.append(SeqRange(rng, seqnames[i], strands[i], data_list=data_list[i]))
             else:
-                self._ranges.append(SeqRange(rng, strands[i], seqnames[i]))
+                self._ranges.append(SeqRange(rng, seqnames[i], strands[i]))
 
         self.seqlengths = seqlengths        
 
