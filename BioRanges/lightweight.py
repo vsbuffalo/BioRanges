@@ -67,7 +67,7 @@ class Range(object):
 
     def __repr__(self):
         if self.name is not None:
-            return "Range '%s' over [%d, %d]" % (self.start, self.end)
+            return "Range '%s' over [%d, %d]" % (self.name, self.start, self.end)
         return "Range over [%d, %d]" % (self.start, self.end)
 
     def overlaps(self, other):
@@ -214,6 +214,42 @@ class SeqRange(object):
             return False
         return self.range.overlaps(other)
 
+    @property
+    def start(self):
+        """
+        Return start position (accessor for range.start).
+        """
+        return self.range.start
+
+    @property
+    def strand(self):
+        """
+        Return strands (accessor for range.strand).
+        """
+        return self.range.strand
+
+    @property
+    def end(self):
+        """
+        Return end position (accessor for range.end).
+        """
+        return self.range.end
+
+    @property
+    def width(self):
+        """
+        Return width (accessor for range.width)
+        """
+        return self.range.width
+
+    def getseq(self, seq):
+        """
+        Given a sequence, return the sequence in the region.
+        """
+        return seq[self.range.start:self.range.end]
+
+    
+
 class SeqRanges(object):
     """
     A container class for a set of ranges on a sequence (chromosome,
@@ -290,7 +326,7 @@ class SeqRanges(object):
             self._ranges.extend(other._ranges)
             self.seqlengths.update(other.seqlengths)
         elif other.__class__.__name__ == "list":
-            class_ok = [x.__class__.__name__ == "SeqRange" for x in seqranges_list]
+            class_ok = [x.__class__.__name__ == "SeqRange" for x in other]
             if not all(class_ok):
                 raise ValueError("append() method can only handle lists "
                                  "where each element is a SeqRange")
@@ -321,6 +357,12 @@ class SeqRanges(object):
         """
         return self._ranges[i]
 
+    def __delitem__(self, i):
+        """
+        Delete a SeqRange from a SeqRanges collection.
+        """
+        del(self._ranges[i])
+
     @property
     def start(self):
         """
@@ -341,6 +383,13 @@ class SeqRanges(object):
         Get list of all widths of ranges.
         """
         return [r.range.width for r in self._ranges]
+
+    @property
+    def strand(self):
+        """
+        Get list of all strand.
+        """
+        return [r.range.strand for r in self._ranges]
 
     def overlaps(self):
         raise ValueError("lightweight Ranges objects do not the "
