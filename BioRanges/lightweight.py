@@ -48,7 +48,8 @@ class Range(object):
         if Counter((start, end, width))[None] > 2:
             raise ValueError("too few arguments for Range(): "
                              "need two of [start, end, width]")
-        if start > end or (width is not None and width < 0):
+        if (start > end or (width is not None and width < 0) or
+            start < 0 or end < 0):
             raise ValueError("negative range widths not allowed "
                              "(end > start and width >= 0)")
 
@@ -236,13 +237,22 @@ class SeqRange(object):
         """
         return self.range.width
 
-    def getseq(self, seq):
+    def sliceseq(self, seq):
         """
         Given a sequence, return the sequence in the region.
         """
         return seq[self.range.start:self.range.end]
 
-    
+    def maskseq(self, seq):
+        """
+        Mask a sequence based on SeqRange, uses standard BioRanges
+        0-based indexing.
+        """
+        start = self.range.start
+        end = self.range.end
+        mask_len = end - start + 1
+        masked = seq[:start] + mask_char*mask_len + seq[end+1:]
+        return masked
 
 class SeqRanges(object):
     """
