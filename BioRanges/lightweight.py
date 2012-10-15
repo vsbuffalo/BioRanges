@@ -220,7 +220,8 @@ class SeqRanges(object):
     contig, etc).
     """
 
-    def __init__(self, ranges, strands, seqnames, datas=None):
+    def __init__(self, ranges, strands, seqnames, seqlengths=dict(),
+                 data_list=None):
         """
         Constructor method for SeqRange objects.
         """
@@ -235,18 +236,20 @@ class SeqRanges(object):
         # O(1) lookup time. The non-lightweight implementation will do
         # this with interval trees and handle these issues throught
         # that.
-        
-        args = [a for a in [ranges, strands, seqnames, datas] if a is not None]
+        args = [ranges, strands, seqnames, data_list]
+        not_none_args = [a for a in args if a is not None]
         arg_len = verify_arg_length("list of ranges, strands, seqnames, and "
-                                     "datas must be of the same length", args)
+                                     "data_list must be of the same length", not_none_args)
 
         self._ranges = list()
         for i in range(arg_len):
             rng = ranges[i]
-            if datas is not None:
-                self._ranges.append(SeqRange(rng, strands[i], seqnames[i], datas[i]))
+            if data_list is not None:
+                self._ranges.append(SeqRange(rng, strands[i], seqnames[i], data_list[i]))
             else:
                 self._ranges.append(SeqRange(rng, strands[i], seqnames[i]))
+
+        self.seqlengths = seqlengths        
 
     def __repr__(self):
         """
@@ -285,6 +288,7 @@ class SeqRanges(object):
             self._ranges.append(other)
         elif other.__class__.__name__ == "SeqRanges":
             self._ranges.extend(other._ranges)
+            self.seqlengths.update(other.seqlengths)
         elif other.__class__.__name__ == "list":
             class_ok = [x.__class__.__name__ == "SeqRange" for x in seqranges_list]
             if not all(class_ok):
