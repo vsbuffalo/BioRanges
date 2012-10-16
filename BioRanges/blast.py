@@ -1,4 +1,3 @@
 """
-Functions for converting BLAST results to ranges.
-
+blast.py
 """

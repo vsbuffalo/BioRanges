@@ -33,6 +33,8 @@ def verify_arg_length(msg, args):
     arg_lens = set([len(x) for x in args if x is not None])
     if len(arg_lens) > 1:
         raise ValueError(msg)
+    if len(arg_lens) == 0:
+        return 0
     return list(arg_lens)[0]
 
 class Range(object):
@@ -76,7 +78,7 @@ class Range(object):
         Return a boolean indicating whether two ranges overlap.
         """
 
-        if other.__class__.__name__ != "Range":
+        if not isinstance(other, "Range"):
             raise ValueError("overlaps() method requires another Range object")
 
         return other.start <= self.end and self.start <= other.end
@@ -111,7 +113,7 @@ class Ranges(object):
         rows = [header]
         ncols = range(len(header))
         max_col_width = [len(c) for c in header]
-        for i, rng in enumerate(self._ranges[:NUM_RANGES_DISPLAY]):
+        for i, rng in enumerate(self._ranges):
             this_row = map(str, [rng.start, rng.end, rng.width, rng.name])
             max_col_width = [max((len(this_row[j]), max_col_width[j])) for j in ncols]
             rows.append(this_row)
@@ -126,6 +128,26 @@ class Ranges(object):
             lines.append(tmp_line)
 
         return "\n".join(lines)
+
+    def append(self, other):
+        """
+        Add on a new Range object to this Ranges object.
+        """
+        if isinstance(other, Range):
+            self._ranges.append(other)
+        elif isinstance(other, Ranges):
+            self._ranges.extend(other._ranges)
+        elif isinstance(other, list):
+            class_ok = [isinstance(x, Range) for x in other]
+            if not all(class_ok):
+                raise ValueError("append() method can only handle lists "
+                                 "where each element is a Range")
+            for rng in other:
+                self._ranges.append(rng)
+        else:
+            raise ValueError("append() method can only objects of class "
+                             "list, Range, and Ranges")
+
 
     def __len__(self):
         """
@@ -206,7 +228,7 @@ class SeqRange(object):
 
     def overlaps(self, other):
         """
-        Return a boolean indicating whterh two ranges overlap. Since
+        Return a boolean indicating whether two ranges overlap. Since
         these are SeqRanges, we have to consider strand and
         seqname. Following GRanges, we will require the are the same;
         to test overlaps ignoring strand, either a different method
@@ -243,7 +265,7 @@ class SeqRange(object):
         """
         return seq[self.range.start:self.range.end]
 
-    def maskseq(self, seq):
+    def maskseq(self, seq, mask_char="X"):
         """
         Mask a sequence based on SeqRange, uses standard BioRanges
         0-based indexing.
@@ -260,8 +282,8 @@ class SeqRanges(object):
     contig, etc).
     """
 
-    def __init__(self, ranges, seqnames, strands, seqlengths=dict(),
-                 data_list=None):
+    def __init__(self, ranges=None, seqnames=None, strands=None, data_list=None,
+                 seqlengths=dict()):
         """
         Constructor method for SeqRange objects.
         """
@@ -285,27 +307,36 @@ class SeqRanges(object):
         for i in range(arg_len):
             rng = ranges[i]
             if data_list is not None:
-                self._ranges.append(SeqRange(rng, seqnames[i], strands[i], data_list=data_list[i]))
+                self._ranges.append(SeqRange(rng, seqnames[i], strands[i], data=data_list[i]))
             else:
                 self._ranges.append(SeqRange(rng, seqnames[i], strands[i]))
 
         self.seqlengths = seqlengths        
 
     def __repr__(self):
+        return self.show()
+        
+    def show(self, keys=list()):
         """
         Representation of SeqRanges collection using a few sample
-        rows.
+        rows, with possible specified data keys also displayed
         """
+        if not isinstance(keys, list) or not isinstance(keys, tuple):
+            raise ValueError("'keys' argument must be list or tuple")
         lines = ["SeqRanges with %d ranges" % len(self)]
         header = ["seqnames", "ranges", "strand"]
+        ncols_seqranges = len(header)
+        header.extend(keys)
         rows = [header]
         ncols = range(len(header))
         max_col_width = [len(c) for c in header]
-        for i, seqrange in enumerate(self._ranges[:NUM_RANGES_DISPLAY]):
+        for i, seqrange in enumerate(self._ranges):
             rng = seqrange.range
             this_row = [seqrange.seqname,
                         "[%d, %d]" % (rng.start, rng.end),
                         str(seqrange.strand)]
+            for key in keys:
+                this_row.append(str(seqrange.data.get(key, "")))
             max_col_width = [max((len(this_row[j]), max_col_width[j])) for j in ncols]
             rows.append(this_row)
 
@@ -315,22 +346,24 @@ class SeqRanges(object):
             for i, col in enumerate(row):
                 if i > 0:
                     tmp_line += " "
+                if i == ncols_seqranges:
+                    tmp_line += "| "
                 tmp_line += " "*(max_col_width[i] - len(col)) + col
             lines.append(tmp_line)
 
-        return "\n".join(lines)
+        print "\n".join(lines)
 
     def append(self, other):
         """
         Add on a new SeqRange object to this SeqRanges object.
         """
-        if other.__class__.__name__ == "SeqRange":
+        if isinstance(other, SeqRange):
             self._ranges.append(other)
-        elif other.__class__.__name__ == "SeqRanges":
+        elif isinstance(other, SeqRanges):
             self._ranges.extend(other._ranges)
-            self.seqlengths.update(other.seqlengths)
-        elif other.__class__.__name__ == "list":
-            class_ok = [x.__class__.__name__ == "SeqRange" for x in other]
+
+        elif isinstance(other, list):
+            class_ok = [isinstance(x, SeqRange) for x in other]
             if not all(class_ok):
                 raise ValueError("append() method can only handle lists "
                                  "where each element is a SeqRange")
@@ -351,7 +384,7 @@ class SeqRanges(object):
         Set item in SeqRanges collection; these are done by index
         only.
         """
-        if seqrange.__class__.__name__ != "SeqRange":
+        if not isinstance(seqrange, SeqRange):
             raise ValueError("assignment can only handle SeqRange objects")
         self._ranges[i] = seqrange
 

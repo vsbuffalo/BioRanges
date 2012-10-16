@@ -13,6 +13,10 @@ operations (coverage, overlap calculation) in the former case would be
 washed out by setting up the interval tree data structure. In the
 second case, interval trees would be absolutely necessary.
 
+In terms of complexity, interval trees are *O(n log n)* construction
+time for *O(log n)* query time. Naive solutions are *O(n)*
+construction time and *O(n)* query time.
+
 For this reason, I think a good ranges module would have two
 submodules: one for lightweight ranges and one for ranges with an
 interval tree backend. Currently I have started working on
@@ -36,6 +40,28 @@ a GenomicRanges `GRanges` `elementMetaData` `DataFrame`. But this
 allows us to store BioPython's HSPs and other objects more
 easily. BioRanges won't have the same expressivity in terms of
 interval operations.
+
+For heavy-weight interval operations,
+[bx-python](https://bitbucket.org/james_taylor/bx-python/wiki/Home)
+may be the best Python solution. Still, I believe that this is
+overkill for those processing other range data (e.g. BLAST HSPs on
+sequences).
+
+## Implementation Details
+
+### Indexing
+
+Due to Python's 0-based indexing, BioRanges uses 0-based
+indexing. This is in contrast to the GFF and GTF formats, and how
+GenomicRanges handles ranges, which use 1-based indexing. However,
+inconsistency in Python in indexing is far less preferable than
+maintaining external consistency.
+
+### Strands and Overlaps
+
+All sequences start and end positions are references on the
+**forward** strand (as `GRanges` does). Overlaps methods are
+strand-specific.
 
 ## Development
 
