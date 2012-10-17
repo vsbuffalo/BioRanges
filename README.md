@@ -18,6 +18,15 @@ This is an immature module, so use with caution. Currently the
 lightweight module is being developed as a prototype for accessor
 methods and operations. 
 
+If you need something more mature, use the libraries below. I am only
+writing this because I can customize the object interface and I can
+design it with BLAST HSP ranges in mind (via lightweight module),
+rather than huge sets of genes, exons, etc.
+
+ - [GenomicRanges](http://bioconductor.org/packages/release/bioc/html/GenomicRanges.html)
+ - [Quicksect](https://github.com/brentp/quicksect)
+ - [bx-python](https://bitbucket.org/james_taylor/bx-python/wiki/Home)
+
 ## Example
 
 Like Bioconductor's excellent `IRanges` and `GenomicRanges` packages,
