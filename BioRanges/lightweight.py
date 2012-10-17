@@ -19,10 +19,15 @@ analysis.
 # implemented as the back processing end for these classes' methods,
 # we will likely go this approach.
 
+# Todo:
+#
+# - Allow * strands to work as wildcards.
+
 STRAND_OPTIONS = ("+", "-", "*")
 NUM_RANGES_DISPLAY = 10
 
 import pdb
+import numbers
 from collections import Counter
 
 def verify_arg_length(msg, args):
@@ -80,11 +85,23 @@ class Range(object):
         """
         Return a boolean indicating whether two ranges overlap.
         """
-        if not isinstance(other, "Range"):
+        if not isinstance(other, Range):
             raise ValueError("overlaps() method requires another Range object")
 
         return other.start <= self.end and self.start <= other.end
 
+    def __contains__(self, other):
+        """
+        Check if this range contains a single position (integer, or to
+        be safe, float also)
+        """
+        if isinstance(other, numbers.Number):
+            return other <= self.end and self.start <= other
+        if isinstance(other, Range):
+            return self.overlaps(other)
+        else:
+            raise ValueError("Range.__contains__ requires other object "
+                             "to be numeric or Range")
 class Ranges(object):
     """
     Container class for Range objects.
@@ -196,6 +213,20 @@ class Ranges(object):
         """
         return [r.width for r in self._ranges]
 
+    def __contains__(self, other):
+        """
+        Look to see if any range contains an integer or other Range
+        object. In lightweight implementation, this is O(n) worst
+        case, but because return boolean, we can break if something is
+        found earlier.
+
+        Type checking done by Range.__contains__.
+        """
+        for rng in self._ranges:
+            if rng.contains(other):
+                return True
+        return False
+
     def overlaps(self):
         """
         Placeholder for overlaps, telling users to use non-lightweight
@@ -242,7 +273,7 @@ class SeqRange(object):
         """
         if self.seqname != other.seqname or self.strand != other.strand:
             return False
-        return self.range.overlaps(other)
+        return self.range.overlaps(other.range)
 
     def __len__(self):
         """
@@ -309,6 +340,18 @@ class SeqRange(object):
         mask_len = end - start + 1
         masked = seq[:start] + mask_char*mask_len + seq[end+1:]
         return masked
+
+    def __contains__(self, other):
+        """
+        Check whether this SeqRange object contains another SeqRange
+        object.
+        """
+        if not isinstance(other, SeqRange):
+            raise ValueError("SeqRange.__contains__ requires "
+                             "other object to be SeqRange")
+        if other.seqname != self.seqname or other.strand != self.strand:
+            return False
+        return other.range in self.range
 
 class SeqRanges(object):
     """

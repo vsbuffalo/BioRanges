@@ -1,67 +1,105 @@
 # BioRanges - Ranges for biological data in Python
 
-This module is experimental. I do not recommend you use this for
-anything at this stage.
+BioRanges is a library for storing Range data in Python, especially
+designed for ranges on genomic sequences. In the future, it will have
+two modules: lightweight ranges for storing a few ranges on lots of
+sequences (i.e. when BLASTing hundreds of thousands of contigs), and a
+module with an interval tree backend for processing up to hundreds of
+thousands of ranges on a few sequences (i.e. when storing genes). Both
+would have idential interfaces so they could be swapped easily via one
+`import` line.
 
-## Design 
+## Maturity
 
-In some cases, we don't want heavyweight ranges, and in other cases we
-do. Consider two cases: a few HSPs per 100,000 contigs, and 100,000
-ranges on 23 chromosomes. In the first case, constructing an interval
-tree per contig would be overkill. Any efficiency gained in some
-operations (coverage, overlap calculation) in the former case would be
-washed out by setting up the interval tree data structure. In the
-second case, interval trees would be absolutely necessary.
+This is an immature module, so use with caution. Currently the
+lightweight module is being developed as a prototype for accessor
+methods and operations. 
 
-In terms of complexity, interval trees are *O(n log n)* construction
-time for *O(log n)* query time. Naive solutions are *O(n)*
-construction time and *O(n)* query time.
+## Example
 
-For this reason, I think a good ranges module would have two
-submodules: one for lightweight ranges and one for ranges with an
-interval tree backend. Currently I have started working on
-`BioRanges.lightweight`.
+Like Bioconductor's excellent `IRanges` and `GenomicRanges` packages,
+BioRanges has abstractions for a generic range and a genomic
+(sequence) range. Respectively, these are `Range` and
+`SeqRange`. Unlike Bioconductor, there are separate classes for a
+single range and a collection of ranges (this makes sense, since R is
+a vector-based langauge and Python is not).
 
-The attributes and methods of all classes must be generic: the
-backends *must* be transparent. Minor differences in private
-attrbiutes are acceptable of course, to allow for different data
-structures. We may wish to implement interval trees in Cython too. 
+`Range` has intuitive functionality:
 
-All interfaces are modelled after Bioconductor's `GenomicRanges` and
-`IRanges`. I highly recommend these over this module if your end goal
-is analysis. These are much more mature packages, and R with
-Bioconductor is a better environment for analysis in my opinion. But
-for processing lots of data, Python can be a more comfortable
-environment.
+    >>> from BioRanges.lightweight import Range, Ranges, SeqRange, SeqRanges
+    >>> a = Range(100, 140)
+    >>> b = Range(104, 105)
+    >>> a in b
+    True
+    >>> c = Range(200, 200) # e.g. a SNP
+    >>> c in b
+    False
+    >>> 200 in c
+    True
+    >>> a.overlaps(c)
+    False
+    >>> a.overlaps(b)
+    True
 
-There are some key differences between BioRanges and GenomicRanges:
-data is stored in a dictionary, so it won't have the same structure as
-a GenomicRanges `GRanges` `elementMetaData` `DataFrame`. But this
-allows us to store BioPython's HSPs and other objects more
-easily. BioRanges won't have the same expressivity in terms of
-interval operations.
+`Ranges` collections behave like lists:
 
-For heavy-weight interval operations,
-[bx-python](https://bitbucket.org/james_taylor/bx-python/wiki/Home)
-may be the best Python solution. Still, I believe that this is
-overkill for those processing other range data (e.g. BLAST HSPs on
-sequences).
+    >>> x = Ranges()
+    >>> x.append(a)
+    >>> x.append(b)
+    >>> x.append(c)
+    >>> x
+    Ranges with 3 ranges
+    start end width name
+      100 140    40 None
+      104 105     1 None
+      200 200     0 None
 
-## Implementation Details
+`SeqRange` requires strand and sequence name, and optionally sequence
+lengths and data.
 
-### Indexing
+    >>> sa = SeqRange(a, "chr1", "+", data={"gene_name":"fake-gene-1a"})
+    >>> sa
+    SeqRange on 'chr1', strand '+' at [100, 140], 1 data keys
 
-Due to Python's 0-based indexing, BioRanges uses 0-based
-indexing. This is in contrast to the GFF and GTF formats, and how
-GenomicRanges handles ranges, which use 1-based indexing. However,
-inconsistency in Python in indexing is far less preferable than
-maintaining external consistency.
+Unlike GenomicRanges, data is shapeless and potentially ragged (for
+better or worse). It can be accessed or set from the `SeqRange` object
+like an element from a dictionary.
 
-### Strands and Overlaps
+    >>> sa['gene_name'] = "other-fake-gene-1b"
 
-All sequences start and end positions are references on the
-**forward** strand (as `GRanges` does). Overlaps methods are
-strand-specific.
+Collections of `SeqRange` objects behave like lists, and be created
+via lists of elements:
+
+    >>> genes = SeqRanges(ranges, ["chr1"]*4, ["+"]*4, data_list=[{"gene_id":x} for x in range(4)])
+    >>> genes
+    SeqRanges with 4 ranges
+    seqnames   ranges strand
+       chr1 [0, 100]      +
+       chr1 [1, 101]      +
+       chr1 [2, 102]      +
+       chr1 [3, 103]      +
+
+Because `SeqRange` is potentially ragged, it isn't printed in the
+`repr` method. However, some keys can optionally be provided:
+
+    >>> print genes.show(["gene_id"])
+    SeqRanges with 4 ranges
+    seqnames   ranges strand | gene_id
+        chr1 [0, 100]      + |       0
+        chr1 [1, 101]      + |       1
+        chr1 [2, 102]      + |       2
+        chr1 [3, 103]      + |       3
+
+Ordered lists of this data can be accessed by attribute (if it's
+related to a SeqRange attribute), or by the `getdata()` method if it's
+`SeqRange` data:
+
+    >>> genes.width
+    [100, 100, 100, 100]
+    >>> genes.start
+    [0, 1, 2, 3]
+    >>> genes.getdata("gene_id")
+    [0, 1, 2, 3]
 
 ## Development
 
@@ -70,5 +108,10 @@ if you wish to join, or just clone and send a pull request.
 
 ## Todo
 
- - Unit tests
+ - When interval trees are implemented, perhaps make GenericRange,
+   GenericSeqRange, GenericRanges, GenericSeqRanges, etc to allow both
+   lightweight and the interval tree to inherit from.
+
+ - Unit tests 
+
  - All interval tree backend code, efficiency testing.
