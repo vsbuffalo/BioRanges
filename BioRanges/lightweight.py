@@ -3,7 +3,8 @@ Lightweight Ranges for Biological Data.
 
 These range classes are not meant for more than a few ranges per
 sequence, nor for large overlap calculations. For that, use
-BioRanges.Ranges. These will work fine for BLAST hits.
+BioRanges.Ranges. These were designed for and work great for
+representing BLAST HSPs on the query sequence.
 
 Much of the credit for interfaces goes to Bioconductor's GenomicRanges
 and IRanges. These are *better* for analysis than these Python
@@ -66,6 +67,8 @@ class Range(object):
         self.start = start
         self.end = end
         self.width = width
+        if name is not None and not isinstance(name, str):
+            raise ValueError("name argument must be string")
         self.name = name
 
     def __repr__(self):
@@ -77,7 +80,6 @@ class Range(object):
         """
         Return a boolean indicating whether two ranges overlap.
         """
-
         if not isinstance(other, "Range"):
             raise ValueError("overlaps() method requires another Range object")
 
@@ -205,7 +207,9 @@ class Ranges(object):
 
 class SeqRange(object):
     """
-    A range on a sequence (chromosome, contig, etc).
+    A range on a sequence (chromosome, contig, etc). Features, data,
+    and metadata are not formally defined: they are stored using a
+    standard dictionary. 
     """
 
     def __init__(self, range, seqname, strand, data=dict()):
@@ -219,6 +223,8 @@ class SeqRange(object):
             raise ValueError("strand must be either: %s" % ', '.join(STRAND_OPTIONS))
 
         self.strand = strand
+        if not isinstance(data, dict):
+            raise ValueError("data argument must be a dictionary")
         self.data = data
 
     def __repr__(self):
@@ -237,6 +243,34 @@ class SeqRange(object):
         if self.seqname != other.seqname or self.strand != other.strand:
             return False
         return self.range.overlaps(other)
+
+    def __len__(self):
+        """
+        Return the number of elements in the data dictionary. Use the
+        width() method for length of the range.
+        """
+        return len(self.data)
+
+    def __setitem__(self, key, value):
+        """
+        Set the key to value in the data dictionary.
+        """
+        self.data[key] = value
+
+    def __getitem__(self, key):
+        """
+        Get an item from the data dictionary.
+        """
+        return self.data[key]
+
+    def keys(self):
+        return self.data.keys()
+
+    def get(self, key, other=None):
+        """
+        get() method which accesses data dictionary.
+        """
+        return self.data.get(key, other)
 
     @property
     def start(self):
@@ -321,7 +355,7 @@ class SeqRanges(object):
         Representation of SeqRanges collection using a few sample
         rows, with possible specified data keys also displayed
         """
-        if not isinstance(keys, list) or not isinstance(keys, tuple):
+        if not isinstance(keys, (list, tuple)):
             raise ValueError("'keys' argument must be list or tuple")
         lines = ["SeqRanges with %d ranges" % len(self)]
         header = ["seqnames", "ranges", "strand"]
@@ -351,7 +385,7 @@ class SeqRanges(object):
                 tmp_line += " "*(max_col_width[i] - len(col)) + col
             lines.append(tmp_line)
 
-        print "\n".join(lines)
+        return "\n".join(lines)
 
     def append(self, other):
         """
@@ -428,6 +462,13 @@ class SeqRanges(object):
         """
         return [r.range.strand for r in self._ranges]
 
+    def getdata(self, key, other=None):
+        """
+        For a key, return a list (in order of ranges) of all data
+        elements with provided key.
+        """
+        return [seqrng.get(key, other) for seqrng in self._ranges]
+    
     def overlaps(self):
         raise ValueError("lightweight Ranges objects do not the "
                          "support overlap() method")
