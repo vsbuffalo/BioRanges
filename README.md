@@ -7,7 +7,10 @@ sequences (i.e. when BLASTing hundreds of thousands of contigs), and a
 module with an interval tree backend for processing up to hundreds of
 thousands of ranges on a few sequences (i.e. when storing genes). Both
 would have idential interfaces so they could be swapped easily via one
-`import` line.
+`import` line, *a la*:
+
+    from BioRanges.lightweight import SeqRanges
+    from BioRanges.intervaltree import SeqRanges
 
 ## Maturity
 
