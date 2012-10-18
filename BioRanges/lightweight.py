@@ -22,11 +22,12 @@ analysis.
 # Todo:
 #
 # - Allow * strands to work as wildcards.
-
+# - check that any new seqrange added to seqrange falls in seqlength
 STRAND_OPTIONS = ("+", "-", "*")
 NUM_RANGES_DISPLAY = 10
 
 import pdb
+from copy import deepcopy
 import numbers
 from collections import Counter
 
@@ -243,12 +244,21 @@ class SeqRange(object):
     standard dictionary. 
     """
 
-    def __init__(self, range, seqname, strand, data=dict()):
+    def __init__(self, range, seqname, strand, seqlength=None, data=dict()):
         """
         Constructor method for SequenceRange objects.
         """
         self.range = range
         self.seqname = seqname
+        if seqlength <= range.start or seqlength <= range.end:
+            # mind fence post errors here: with 0 based indexing, a
+            # sequence length of 11 would be values [0, 10]. The last
+            # most range supported is a single base at [10, 10]. Thus
+            # if a range is created with either start or end <=
+            # length, we error out.
+            raise ValueError("seqlength argument must be greater "
+                             "than start and end")
+        self.seqlength = seqlength
 
         if strand not in STRAND_OPTIONS:
             raise ValueError("strand must be either: %s" % ', '.join(STRAND_OPTIONS))
@@ -353,6 +363,71 @@ class SeqRange(object):
             return False
         return other.range in self.range
 
+    def forward_coordinate_transform(self):
+        """
+        Return a new SeqObject (a copy of this one) that is this same
+        range on the forward stand. This object is returned if it's
+        it's already on the '+' strand.
+
+        When is this used? If a BLASTX nucleotide query is reverse
+        complemented to the protein sequence, the N-terminus of the
+        protein will correspond to the *end* of the sequence. In this
+        case the end of the sequence is the 5' end of the
+        gene. SeqRanges require that start <= end position. When
+        comparing a BLASTX HSP feature with a predicted ORF candidate
+        (which must be on the forward strand, since transcription is
+        5' to 3'), we must take an HSP on the negative strand and
+        transform it so that it still corresponds to a reverse
+        complemented sequence.
+
+        To illustrate what this does, imagine a given sequence is in the
+        reverse orientation. A range would look like this:
+                            18        28
+                             |         |
+                             S---------E
+        S  |--------------------------------|  E
+           0                                33
+           ATTCATGAGATCTAGAGATCTATAGAGAGAGTCT
+        sequence_length = 34
+        
+        Note that that the condition S <= E must always be true,
+        regardless of orientation.
+
+        Suppose we wish to break this sequence up into codons. First,
+        we would take the reverse complement. The new start position
+        would be the E position here, with coordinate:
+
+        s = (sequence_length - 1) - E
+
+        The end position would be:
+
+        e = (sequence_length - 1) - S
+        
+        Looking like:
+
+                5         15
+                |         |      
+                s---------e
+        E  |--------------------------------|  3
+           0                                33
+           AGACTCTCTCTATAGATCTCTAGATCTCATGAAT
+           
+        This requires seqlength to be set; otherwise a ValueError
+        will be raised.
+        """
+        if self.seqlength in (None, 0):
+            raise ValueError("cannot calculate position on forward "
+                             "strand if seqlength is None or 0")
+        
+        if self.strand == "+":
+            return self
+        new = deepcopy(self)
+        new.strand = "+"
+        new.range.start = self.seqlength - self.end
+        new.range.end = self.seqlength - self.start
+        assert(new.range.start <= new.range.end)
+        return new
+
 class SeqRanges(object):
     """
     A container class for a set of ranges on a sequence (chromosome,
@@ -383,12 +458,15 @@ class SeqRanges(object):
         self._ranges = list()
         for i in range(arg_len):
             rng = ranges[i]
+            seqrng_seqlen = seqlength.get(seqname[i], None)
             if data_list is not None:
-                self._ranges.append(SeqRange(rng, seqnames[i], strands[i], data=data_list[i]))
+                self._ranges.append(SeqRange(rng, seqnames[i], strands[i],
+                                             seqlength=seqrng_seqlen, data=data_list[i]))
             else:
-                self._ranges.append(SeqRange(rng, seqnames[i], strands[i]))
+                self._ranges.append(SeqRange(rng, seqnames[i], strands[i],
+                                             seqlength=seqrng_seqlen))
 
-        self.seqlengths = seqlengths        
+        self.seqlengths = seqlengths # TODO handle propogating these changes downwards
 
     def __repr__(self):
         return self.show()
