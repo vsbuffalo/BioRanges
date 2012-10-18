@@ -57,18 +57,18 @@ class Range(object):
         if Counter((start, end, width))[None] > 2:
             raise ValueError("too few arguments for Range(): "
                              "need two of [start, end, width]")
-        if (start > end or (width is not None and width < 0) or
-            start < 0 or end < 0):
-            raise ValueError("negative range widths not allowed "
-                             "(end > start and width >= 0)")
-
         # infer missing values (as Bioconductor's IRanges does)
         if start is None:
-            start = end - width
+            start = end - width + 1
         if end is None:
-            end = start + width
+            end = start + width - 1
         if width is None:
-            width = end - start
+            width = end - start + 1
+
+        # Now check that things make sense
+        if (start > end or width < 0 or start < 0 or end < 0):
+            raise ValueError("negative range widths not allowed "
+                             "(end > start and width >= 0)")
 
         self.start = start
         self.end = end
@@ -338,7 +338,7 @@ class SeqRange(object):
         """
         Given a sequence, return the sequence in the region.
         """
-        return seq[self.range.start:self.range.end]
+        return seq[self.range.start:(self.range.end+1)]
 
     def maskseq(self, seq, mask_char="X"):
         """
@@ -423,8 +423,8 @@ class SeqRange(object):
             return self
         new = deepcopy(self)
         new.strand = "+"
-        new.range.start = self.seqlength - self.end
-        new.range.end = self.seqlength - self.start
+        new.range.start = self.seqlength - 1 - self.end
+        new.range.end = self.seqlength - 1 - self.start
         assert(new.range.start <= new.range.end)
         return new
 
