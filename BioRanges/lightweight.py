@@ -23,6 +23,8 @@ analysis.
 #
 # - Allow * strands to work as wildcards.
 # - check that any new seqrange added to seqrange falls in seqlength
+# - strict contain() method needed (range entirely contains another range).
+
 STRAND_OPTIONS = ("+", "-", "*")
 NUM_RANGES_DISPLAY = 10
 
@@ -93,8 +95,8 @@ class Range(object):
 
     def __contains__(self, other):
         """
-        Check if this range contains a single position (integer, or to
-        be safe, float also)
+        Check if this range contains a single position or overlaps a
+        range.
         """
         if isinstance(other, numbers.Number):
             return other <= self.end and self.start <= other
@@ -103,6 +105,7 @@ class Range(object):
         else:
             raise ValueError("Range.__contains__ requires other object "
                              "to be numeric or Range")
+        
 class Ranges(object):
     """
     Container class for Range objects.
@@ -221,6 +224,8 @@ class Ranges(object):
         case, but because return boolean, we can break if something is
         found earlier.
 
+        Contains allows for overlaps.
+
         Type checking done by Range.__contains__.
         """
         for rng in self._ranges:
@@ -250,7 +255,7 @@ class SeqRange(object):
         """
         self.range = range
         self.seqname = seqname
-        if seqlength <= range.start or seqlength <= range.end:
+        if seqlength is not None and (seqlength <= range.start or seqlength <= range.end):
             # mind fence post errors here: with 0 based indexing, a
             # sequence length of 11 would be values [0, 10]. The last
             # most range supported is a single base at [10, 10]. Thus
@@ -411,7 +416,10 @@ class SeqRange(object):
         E  |--------------------------------|  3
            0                                33
            AGACTCTCTCTATAGATCTCTAGATCTCATGAAT
-           
+
+        More info here:
+        http://genomewiki.ucsc.edu/index.php/Coordinate_Transforms
+        
         This requires seqlength to be set; otherwise a ValueError
         will be raised.
         """
@@ -590,6 +598,39 @@ class SeqRanges(object):
         """
         return [seqrng.get(key, other) for seqrng in self._ranges]
     
-    def overlaps(self):
-        raise ValueError("lightweight Ranges objects do not the "
-                         "support overlap() method")
+    def overlaps(self, other):
+        """
+        Return True if this SeqRanges object overlaps a SeqRange
+        object. Worst case O(n).
+        """
+        if isinstance(other, SeqRange):
+            for seqrng in self._ranges:
+                if seqrng.overlaps(other):
+                    return True
+        else:
+            raise ValueError("other argument must be SeqRange object")
+        return False
+
+    def subsetByOverlaps(self, other):
+        """
+        Return a SeqRanges object containing only those SeqRange
+        objects that overlap `other`.
+
+        Note that the underlying objects are the same, so changing
+        them changes the original. This is because this is a standard
+        behavior in Python, e.g.:
+
+        >>> a = dict(key=1)
+        >>> x = [a, 4]
+        >>> x[0]['key'] = 3
+        >>> a
+        {'key': 3}
+        """
+        new = SeqRanges()
+        if isinstance(other, (SeqRange, SeqRanges)):
+            for seqrng in self._ranges:
+                if other.overlaps(seqrng):
+                    new.append(seqrng)
+        else:
+            raise ValueError("other must be SeqRange or SeqRanges object")
+        return new
